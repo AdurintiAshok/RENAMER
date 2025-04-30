@@ -35,7 +35,7 @@ const ImageRenamer = () => {
   });
   useEffect(() => {
     generateNewNames(files);
-  }, [date, startTime]);
+  }, [date, startTime,companyCode,strikeNumber]);
   
   const formatDate = (isoDate: string): string => {
     const [year, month, day] = isoDate.split('-');
