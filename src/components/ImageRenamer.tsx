@@ -12,8 +12,8 @@ const ImageRenamer = () => {
   const [files, setFiles] = useState<FileWithPreview[]>([]);
   const [startTime, setStartTime] = useState('09:30');
   const [date, setDate] = useState('2025-04-30');
-  const [companyCode, setCompanyCode] = useState('TEST');
-  const [strikeNumber, setStrikeNumber] = useState('298432');
+  const [companyCode, setCompanyCode] = useState('');
+  const [strikeNumber, setStrikeNumber] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
