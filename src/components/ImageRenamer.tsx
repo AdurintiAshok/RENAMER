@@ -16,15 +16,18 @@ const ImageRenamer = () => {
   const [strikeNumber, setStrikeNumber] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    const newFiles = acceptedFiles.slice(0, 100).map(file => 
-      Object.assign(file, {
-        preview: URL.createObjectURL(file)
-      })
-    );
-    setFiles(newFiles);
-    
-  }, [date, companyCode, strikeNumber, startTime]);
+ const onDrop = useCallback((acceptedFiles: File[]) => {
+  const newFiles = acceptedFiles.slice(0, 100).map(file =>
+    Object.assign(file, {
+      preview: URL.createObjectURL(file)
+    })
+  );
+  setFiles(prev => {
+    const updated = [...newFiles];
+    generateNewNames(updated); // 🔥 Call renaming immediately
+    return updated;
+  });
+}, [date, companyCode, strikeNumber, startTime]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -122,6 +125,8 @@ const ImageRenamer = () => {
   };
 
   return (
+<div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 py-12 px-4 sm:px-6 lg:px-8 flex justify-center">
+  <div className="w-full max-w-3xl"> {/* Adjust max-w-3xl to max-w-xl or md if you want it narrower */}
     <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
 <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-6 sm:px-8">
   <h1 className="text-2xl font-bold text-white text-center">
@@ -247,6 +252,8 @@ const ImageRenamer = () => {
           </div>
         )}
       </div>
+    </div>
+    </div>
     </div>
   );
 };
