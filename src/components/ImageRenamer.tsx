@@ -1,45 +1,102 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
-import JSZip from 'jszip';
+import JSZip, { file } from 'jszip';
 import { Upload, Download, Clock, X, Image as ImageIcon, Calendar, Building2, Hash } from 'lucide-react';
 
 interface FileWithPreview extends File {
   preview?: string;
   newName?: string;
+  customTime?: string | null;
 }
 
-const ImageRenamer = () => {
+const ScreenshotTimeScribe = () => {
   const [files, setFiles] = useState<FileWithPreview[]>([]);
   const [startTime, setStartTime] = useState('09:30');
   const [date, setDate] = useState('2025-04-30');
   const [companyCode, setCompanyCode] = useState('');
   const [strikeNumber, setStrikeNumber] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [notification, setNotification] = useState<{show: boolean; message: string; type: 'success' | 'error'}>({
+    show: false,
+    message: '',
+    type: 'success'
+  });
 
- const onDrop = useCallback((acceptedFiles: File[]) => {
-  const newFiles = acceptedFiles.slice(0, 100).map(file =>
-    Object.assign(file, {
-      preview: URL.createObjectURL(file)
-    })
-  );
+  const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
+    setNotification({ show: true, message, type });
+    setTimeout(() => setNotification({ show: false, message: '', type: 'success' }), 4000);
+  };
+
+const onDrop = useCallback((acceptedFiles: File[]) => {
+  if (acceptedFiles.length === 0) return;
+
+  const newFiles: FileWithPreview[] = acceptedFiles.slice(0, 100).map(file => {
+    const originalName = file.name;
+    // Added a more robust fallback for filename extraction and ensured it ends with an extension
+    const fallbackName = (file as any).path?.split('/').pop()?.split('\\').pop() || `untitled_screenshot_${Date.now()}.png`;
+
+    const finalFileName = originalName || fallbackName;
+
+    // Create a new File object with the desired name.
+    // This is crucial because the original File's 'name' property is a getter.
+    const renamedFile = new File([file], finalFileName, { type: file.type, lastModified: file.lastModified });
+
+    // Explicitly create the FileWithPreview object ensuring 'name' is always present.
+    // We combine the properties from the 'renamedFile' and our custom ones.
+    const fileWithCustomProps: FileWithPreview = {
+      // Copy properties from the newly created 'renamedFile'
+      // This includes 'name', 'size', 'type', 'lastModified'
+      // We can't use spread syntax like { ...renamedFile } for all properties
+      // if 'renamedFile' is a complex Blob/File object that might have non-enumerable properties.
+      // So let's build it carefully.
+      name: renamedFile.name, // Explicitly set the name here
+      size: renamedFile.size,
+      type: renamedFile.type,
+      lastModified: renamedFile.lastModified,
+      arrayBuffer: renamedFile.arrayBuffer.bind(renamedFile), // Keep methods if needed
+      text: renamedFile.text.bind(renamedFile),
+      slice: renamedFile.slice.bind(renamedFile),
+      // Add your custom properties
+      preview: URL.createObjectURL(file), // Use original 'file' for preview to be safe
+      customTime: null,
+      webkitRelativePath: '',
+      bytes: function (): Promise<Uint8Array> {
+        throw new Error('Function not implemented.');
+      },
+      stream: function (): ReadableStream<Uint8Array> {
+        throw new Error('Function not implemented.');
+      }
+    };
+
+    return fileWithCustomProps;
+  });
+
   setFiles(prev => {
-    const updated = [...newFiles];
-    generateNewNames(updated); // 🔥 Call renaming immediately
+    const updated = [...prev, ...newFiles];
+    // Generate new names immediately after state update
+    // This will use the 'name' property we just ensured is on the object.
+    setTimeout(() => generateNewNames(updated), 0);
     return updated;
   });
-}, [date, companyCode, strikeNumber, startTime]);
+
+  showNotification(`Added ${newFiles.length} screenshot${newFiles.length !== 1 ? 's' : ''} successfully!`);
+}, [date, companyCode, strikeNumber, startTime]); // Dependencies seem correct
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
       'image/*': ['.png', '.jpg', '.jpeg']
     },
-    multiple: true
+    multiple: true,
+    maxFiles: 100
   });
+
   useEffect(() => {
-    generateNewNames(files);
-  }, [date, startTime,companyCode,strikeNumber]);
-  
+    if (files.length > 0) {
+      generateNewNames(files);
+    }
+  }, [date, startTime, companyCode, strikeNumber]);
+
   const formatDate = (isoDate: string): string => {
     const [year, month, day] = isoDate.split('-');
     return `${day}-${month}-${year}`;
@@ -48,58 +105,62 @@ const ImageRenamer = () => {
   const formatTime = (hours: number, minutes: number): string => {
     const hourStr = String(hours).padStart(2, '0');
     const minuteStr = String(minutes).padStart(2, '0');
-    return `${hourStr}.${minuteStr}`; 
+    return `${hourStr}.${minuteStr}`;
   };
 
-  const generateNewNames = (filesToRename: FileWithPreview[]) => {
-    const [hours, minutes] = startTime.split(':').map(Number);
+   const generateNewNames = (filesToRename: FileWithPreview[]) => {
+    let [hours, minutes] = startTime.split(':').map(Number);
     const formattedDate = formatDate(date);
+
     const updatedFiles = filesToRename.map((file, index) => {
-      const totalMinutes = hours * 60 + minutes + (index * 5);
-      const newHours = Math.floor(totalMinutes / 60);
-      const newMinutes = totalMinutes % 60;
-      const timeString = formatTime(newHours, newMinutes);
-   
+      let currentCustomTime = file.customTime;
+      if (!currentCustomTime) {
+        currentCustomTime = formatTime(hours, minutes).replace('.', ':');
+        minutes += 5;
+        hours += Math.floor(minutes / 60);
+        minutes = minutes % 60;
+      }
+
+      const timeString = currentCustomTime.replace(':', '.');
       const newName = `${formattedDate} ${companyCode} ${strikeNumber} ${timeString}`;
-      return Object.assign(file, { newName });
+      return { ...file, newName };
     });
 
     setFiles(updatedFiles);
-  };
+  }
 
-  const handleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setStartTime(e.target.value);
-    generateNewNames(files);
-  };
-
-  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setDate(e.target.value);
-    generateNewNames(files);
-  };
-
-  const handleCompanyCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCompanyCode(e.target.value.toUpperCase());
-    generateNewNames(files);
-  };
-
-  const handleStrikeNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setStrikeNumber(e.target.value);
-    generateNewNames(files);
+  const handleCustomTimeChange = (index: number, value: string) => {
+    const updatedFiles = [...files];
+    updatedFiles[index].customTime = value || null;
+    setFiles(updatedFiles);
+    generateNewNames(updatedFiles);
   };
 
   const downloadAll = async () => {
     if (files.length === 0) return;
-
     setIsProcessing(true);
-    const zip = new JSZip();
 
     try {
+      const zip = new JSZip();
+
       for (const file of files) {
-        const blob = await fetch(file.preview!).then(r => r.blob());
-        zip.file(`${file.newName}.${file.name.split('.').pop()}`, blob);
+        // The console.log was for debugging; you can remove it now or keep it for final checks
+        // console.log(file); // This log is what showed the missing 'name'
+
+        // This check should now always pass if onDrop is correctly modified
+        if (!file.name || !file.newName) {
+          console.warn('Skipping file due to missing data (name or newName missing):', file);
+          continue;
+        }
+
+        const extension = file.name.split('.').pop() || 'jpg'; // Use file.name, which is now guaranteed to exist
+        
+        // **Crucial Modification Here:** Read the file content as an ArrayBuffer
+        const fileContent = await file.arrayBuffer(); 
+        zip.file(`${file.newName}.${extension}`, fileContent); // Pass the content, not the File object
       }
 
-      const content = await zip.generateAsync({ type: "blob" });
+      const content = await zip.generateAsync({ type: 'blob' });
       const url = URL.createObjectURL(content);
       const link = document.createElement('a');
       link.href = url;
@@ -108,154 +169,261 @@ const ImageRenamer = () => {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
+
+      showNotification(`Successfully downloaded ${files.length} renamed screenshots! 🎉`);
     } catch (error) {
       console.error('Error creating zip:', error);
+      showNotification('Failed to create download. Please try again.', 'error');
     } finally {
       setIsProcessing(false);
     }
   };
 
+  // ... (rest of your component, removeFile, clearAll functions and JSX)
+
+
+
   const removeFile = (index: number) => {
     setFiles(files => {
       const newFiles = [...files];
-      URL.revokeObjectURL(newFiles[index].preview!);
+      if (newFiles[index].preview) {
+        URL.revokeObjectURL(newFiles[index].preview!);
+      }
       newFiles.splice(index, 1);
       return newFiles;
     });
   };
 
+  const clearAll = () => {
+    files.forEach(file => {
+      if (file.preview) {
+        URL.revokeObjectURL(file.preview);
+      }
+    });
+    setFiles([]);
+    showNotification('All files cleared');
+  };
+
   return (
-<div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 py-12 px-4 sm:px-6 lg:px-8 flex justify-center">
-  <div className="w-full max-w-3xl"> {/* Adjust max-w-3xl to max-w-xl or md if you want it narrower */}
-    <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-<div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-6 sm:px-8">
-  <h1 className="text-2xl font-bold text-white text-center">
-    RENAMER
-  </h1>
-  <p className="mt-2 text-sm text-indigo-100 text-center">
-    — Upload up to 100 screenshots
-  </p>
-</div>
-
-
-
-      <div className="p-6 sm:p-8">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
-              <Calendar className="w-4 h-4 mr-2" />
-              Date
-            </label>
-            <input
-              type="date"
-              value={date}
-              onChange={handleDateChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
-              <Building2 className="w-4 h-4 mr-2" />
-              Name
-            </label>
-            <input
-              type="text"
-              value={companyCode}
-              onChange={handleCompanyCodeChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder="Enter Number"
-              maxLength={10}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
-              <Hash className="w-4 h-4 mr-2" />
-               Number
-            </label>
-            <input
-              type="text"
-              value={strikeNumber}
-              onChange={handleStrikeNumberChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder="Enter  number"
-              pattern="[0-9]*"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
-              <Clock className="w-4 h-4 mr-2" />
-               Time
-            </label>
-            <input
-              type="time"
-              value={startTime}
-              onChange={handleTimeChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            />
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 relative overflow-hidden">
+      {/* Animated Background Elements */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -inset-10 opacity-50">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-gradient-to-r from-purple-600/20 to-cyan-600/20 rounded-full mix-blend-multiply filter blur-xl animate-pulse"></div>
+          <div className="absolute top-3/4 right-1/4 w-96 h-96 bg-gradient-to-r from-cyan-600/20 to-pink-600/20 rounded-full mix-blend-multiply filter blur-xl animate-pulse delay-1000"></div>
+          <div className="absolute bottom-1/4 left-1/3 w-96 h-96 bg-gradient-to-r from-pink-600/20 to-purple-600/20 rounded-full mix-blend-multiply filter blur-xl animate-pulse delay-2000"></div>
         </div>
+      </div>
 
-        <div
-          {...getRootProps()}
-          className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
-            isDragActive ? 'border-indigo-500 bg-indigo-50' : 'border-gray-300 hover:border-indigo-400'
-          }`}
-        >
-          <input {...getInputProps()} />
-          <Upload className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-          <p className="text-gray-600">Drag & drop screenshots here, or click to select files</p>
-          <p className="text-sm text-gray-500 mt-2">Supports PNG and JPG files</p>
+      {/* Notification */}
+      {notification.show && (
+        <div className={`fixed top-6 right-6 z-50 px-6 py-4 rounded-2xl backdrop-blur-xl border transition-all duration-500 ${
+          notification.type === 'success' 
+            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+            : 'bg-red-500/10 border-red-500/20 text-red-400'
+        } transform ${notification.show ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}`}>
+          <p className="font-medium">{notification.message}</p>
         </div>
+      )}
 
-        {files.length > 0 && (
-          <div className="mt-8">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Preview ({files.length} files)</h2>
-              <button
-                onClick={downloadAll}
-                disabled={isProcessing}
-                className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-              >
-                {isProcessing ? (
-                  <>Processing...</>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4 mr-2" />
-                    Download All
-                  </>
-                )}
-              </button>
+      <div className="relative z-10 min-h-screen p-6">
+        <div className="max-w-6xl mx-auto">
+
+          {/* Main Container */}
+          <div className="glass-strong rounded-3xl p-8 md:p-12 shadow-2xl">
+            {/* Configuration Form */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+              <div className="space-y-3">
+                <label className="flex items-center text-sm font-semibold text-gray-200 mb-2">
+                  <Calendar className="w-5 h-5 mr-2 text-purple-400" />
+                  Date
+                </label>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300"
+                />
+              </div>
+              
+              <div className="space-y-3">
+                <label className="flex items-center text-sm font-semibold text-gray-200 mb-2">
+                  <Building2 className="w-5 h-5 mr-2 text-cyan-400" />
+                  Company Code
+                </label>
+                <input
+                  type="text"
+                  value={companyCode}
+                  onChange={(e) => setCompanyCode(e.target.value.toUpperCase())}
+                  placeholder="AAPL"
+                  maxLength={10}
+                  className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-300"
+                />
+              </div>
+              
+              <div className="space-y-3">
+                <label className="flex items-center text-sm font-semibold text-gray-200 mb-2">
+                  <Hash className="w-5 h-5 mr-2 text-pink-400" />
+                  Strike Number
+                </label>
+                <input
+                  type="text"
+                  value={strikeNumber}
+                  onChange={(e) => setStrikeNumber(e.target.value)}
+                  placeholder="150"
+                  pattern="[0-9]*"
+                  className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all duration-300"
+                />
+              </div>
+              
+              <div className="space-y-3">
+                <label className="flex items-center text-sm font-semibold text-gray-200 mb-2">
+                  <Clock className="w-5 h-5 mr-2 text-emerald-400" />
+                  Start Time
+                </label>
+                <input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-300"
+                />
+              </div>
             </div>
 
-            <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-              {files.map((file, index) => (
-                <div key={index} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <ImageIcon className="w-5 h-5 text-gray-400" />
-                    <div>
-                      <p className="text-sm text-gray-600">{file.name}</p>
-                      <p className="text-sm font-medium text-indigo-600">{file.newName}</p>
+            {/* Upload Zone */}
+            <div
+              {...getRootProps()}
+              className={`relative border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer transition-all duration-500 mb-10 ${
+                isDragActive
+                  ? 'border-purple-400 bg-purple-500/10 scale-105'
+                  : 'border-gray-600 hover:border-purple-500 hover:bg-purple-500/5'
+              }`}
+            >
+              <input {...getInputProps()} />
+              
+              <div className="space-y-6">
+                <div className={`w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-purple-600 to-cyan-600 flex items-center justify-center transition-all duration-500 ${
+                  isDragActive ? 'scale-110 shadow-2xl shadow-purple-500/50' : 'shadow-xl'
+                }`}>
+                  <Upload className="w-10 h-10 text-white" />
+                </div>
+                
+                <div>
+                  <h3 className="text-2xl font-bold text-white mb-2">
+                    {isDragActive ? 'Drop Your Screenshots Here!' : 'Upload Screenshots'}
+                  </h3>
+                  <p className="text-gray-400 text-lg">
+                    Drag & drop up to 100 PNG or JPG files, or click to browse
+                  </p>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Each screenshot will be automatically timestamped with 5-minute intervals
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Files Preview */}
+            {files.length > 0 && (
+              <div className="space-y-8">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <h3 className="text-2xl font-bold text-white">Preview</h3>
+                    <div className="px-4 py-2 bg-gradient-to-r from-purple-600/20 to-cyan-600/20 rounded-full border border-purple-500/30">
+                      <span className="text-purple-300 font-semibold text-sm">
+                        {files.length} file{files.length !== 1 ? 's' : ''}
+                      </span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => removeFile(index)}
-                    className="text-gray-400 hover:text-red-500 transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
+                  
+                  <div className="flex gap-3">
+                    <button
+                      onClick={clearAll}
+                      className="px-6 py-3 bg-red-600/20 hover:bg-red-600/30 border border-red-500/30 text-red-300 rounded-xl font-semibold transition-all duration-300 hover:shadow-lg hover:shadow-red-500/25"
+                    >
+                      Clear All
+                    </button>
+                    <button
+                      onClick={downloadAll}
+                      disabled={isProcessing}
+                      className="px-8 py-3 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 text-white rounded-xl font-semibold transition-all duration-300 hover:shadow-xl hover:shadow-purple-500/25 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+                    >
+                      {isProcessing ? (
+                        <div className="flex items-center">
+                          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-3"></div>
+                          Processing...
+                        </div>
+                      ) : (
+                        <div className="flex items-center">
+                          <Download className="w-5 h-5 mr-2" />
+                          Download All
+                        </div>
+                      )}
+                    </button>
+                  </div>
                 </div>
-              ))}
-            </div>
+
+                <div className="space-y-4 max-h-96 overflow-y-auto scrollbar-custom pr-2">
+                  {files.map((file, index) => (
+                    <div
+                      key={index}
+                      className="group bg-gradient-to-r from-slate-800/50 to-slate-800/30 backdrop-blur-xl border border-slate-700/50 rounded-xl p-4 sm:p-6 hover:from-slate-700/50 hover:to-slate-700/30 hover:border-slate-600/50 transition-all duration-300"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                        <div className="flex items-center gap-4 flex-1">
+                          {/* Serial Number */}
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-purple-600 to-cyan-600 flex items-center justify-center shadow-lg">
+                              <span className="text-white font-bold text-sm sm:text-base">#{index + 1}</span>
+                            </div>
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-slate-700/50 flex items-center justify-center">
+                              <ImageIcon className="w-4 h-4 sm:w-5 sm:h-5 text-gray-300" />
+                            </div>
+                          </div>
+                          
+                          <div className="flex-1 min-w-0 space-y-2">
+                            <div>
+                              <p className="text-xs sm:text-sm text-gray-400 truncate">{file.name}</p>
+                              <p className="text-white font-semibold text-sm sm:text-base truncate">{file.newName}</p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Manual Time Section */}
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-emerald-400" />
+                            <span className="text-xs text-emerald-400 font-medium">Manual Time:</span>
+                          </div>
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+                            <input
+                              type="time"
+                              className="w-full sm:w-32 px-3 py-2 bg-slate-900/50 border border-slate-600/50 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-300"
+                              placeholder="Custom time"
+                              value={file.customTime ?? ''}
+                              onChange={(e) => handleCustomTimeChange(index, e.target.value)}
+                            />
+                            <span className="text-xs text-gray-500 hidden sm:block">Override auto-generated time</span>
+                          </div>
+                        </div>
+                        
+                        {/* Remove Button */}
+                        <button
+                          onClick={() => removeFile(index)}
+                          className="self-end sm:self-center opacity-70 sm:opacity-0 group-hover:opacity-100 p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all duration-300"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
-    </div>
-    </div>
     </div>
   );
 };
 
-export default ImageRenamer;
+export default ScreenshotTimeScribe;
