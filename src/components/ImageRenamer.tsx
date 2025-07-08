@@ -21,6 +21,7 @@ const ScreenshotTimeScribe = () => {
     message: '',
     type: 'success'
   });
+const [selectedPreview, setSelectedPreview] = useState<string | null>(null);
 
   const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ show: true, message, type });
@@ -363,7 +364,7 @@ const onDrop = useCallback((acceptedFiles: File[]) => {
                 </div>
 
                 <div className="space-y-4 max-h-96 overflow-y-auto scrollbar-custom pr-2">
-                  {files.map((file, index) => (
+                  {files.map((file:any, index) => (
                     <div
                       key={index}
                       className="group bg-gradient-to-r from-slate-800/50 to-slate-800/30 backdrop-blur-xl border border-slate-700/50 rounded-xl p-4 sm:p-6 hover:from-slate-700/50 hover:to-slate-700/30 hover:border-slate-600/50 transition-all duration-300"
@@ -375,9 +376,18 @@ const onDrop = useCallback((acceptedFiles: File[]) => {
                             <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-purple-600 to-cyan-600 flex items-center justify-center shadow-lg">
                               <span className="text-white font-bold text-sm sm:text-base">#{index + 1}</span>
                             </div>
-                            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-slate-700/50 flex items-center justify-center">
-                              <ImageIcon className="w-4 h-4 sm:w-5 sm:h-5 text-gray-300" />
-                            </div>
+<div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg overflow-hidden border border-slate-600">
+  <img
+    src={file.preview}
+    alt={`Preview ${index + 1}`}
+    className="w-full h-full object-cover cursor-pointer hover:opacity-80 transition-all duration-200"
+    onClick={() => setSelectedPreview(file.preview)}
+  />
+</div>
+
+
+
+
                           </div>
                           
                           <div className="flex-1 min-w-0 space-y-2">
@@ -417,6 +427,42 @@ const onDrop = useCallback((acceptedFiles: File[]) => {
                     </div>
                   ))}
                 </div>
+                {selectedPreview && (
+  <div
+    className="fixed inset-0  flex items-center justify-center p-6"
+    onClick={() => setSelectedPreview(null)}
+  >
+    <div
+      className="relative bg-slate-900 rounded-xl p-4 shadow-xl max-w-3xl w-full max-h-[90vh] overflow-auto"
+      onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside
+    >
+      {/* Close Button */}
+      <button
+        onClick={() => setSelectedPreview(null)}
+        className="absolute top-2 right-2 text-white bg-red-600 hover:bg-red-700 p-2 rounded-full shadow-lg transition-all"
+      >
+        <X className="w-5 h-5" />
+      </button>
+
+      {/* File name */}
+      <div className="mb-4 text-center">
+        <p className="text-sm text-gray-300 font-semibold">
+          {
+            // Find the matching file name by preview URL
+            files.find(f => f.preview === selectedPreview)?.name || 'Screenshot'
+          }
+        </p>
+      </div>
+
+      {/* Image */}
+      <img
+        src={selectedPreview}
+        alt="Full Preview"
+        className="w-full h-auto rounded-lg object-contain"
+      />
+    </div>
+  </div>
+)}
               </div>
             )}
           </div>
