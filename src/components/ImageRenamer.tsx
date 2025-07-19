@@ -207,6 +207,12 @@ const onDrop = useCallback((acceptedFiles: File[]) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 relative overflow-hidden">
+      <div className="relative z-20 text-center py-4">
+  <p className="text-sm text-gray-400">
+    Created by <span className="text-purple-400 font-semibold hover:text-purple-300 transition-colors duration-300">Ashok Adurinti</span>
+  </p>
+</div>
+
       {/* Animated Background Elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute -inset-10 opacity-50">
@@ -468,6 +474,7 @@ const onDrop = useCallback((acceptedFiles: File[]) => {
           </div>
         </div>
       </div>
+      
     </div>
   );
 };
