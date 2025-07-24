@@ -1,22 +1,22 @@
 import React from 'react';
 import { signInWithPopup } from 'firebase/auth';
-import { auth, provider } from '../utils/firebase'; // Adjust path as needed
+// import { auth, provider } from '../utils/firebase'; // Adjust path as needed
 import { useNavigate } from 'react-router-dom';
 
 const LoginCard = () => {
   const navigate = useNavigate();
 
-  const handleGoogleLogin = async () => {
-    try {
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-      console.log("✅ User Info:", user.displayName);
-      // Navigate to ImageRenamer screen
-      navigate("/image-renamer");
-    } catch (error) {
-      console.error("❌ Google login failed:", error);
-    }
-  };
+  // const handleGoogleLogin = async () => {
+  //   try {
+  //     const result = await signInWithPopup(auth, provider);
+  //     const user = result.user;
+  //     console.log("✅ User Info:", user.displayName);
+  //     // Navigate to ImageRenamer screen
+  //     navigate("/image-renamer");
+  //   } catch (error) {
+  //     console.error("❌ Google login failed:", error);
+  //   }
+  // };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950 flex items-center justify-center p-4">
@@ -45,7 +45,7 @@ const LoginCard = () => {
             </div>
 
             <button
-              onClick={handleGoogleLogin}
+      
               className="w-full bg-white border-2 border-gray-200 rounded-xl px-6 py-4 flex items-center justify-center gap-3 hover:border-gray-300 hover:shadow-md transition-all duration-200 group"
             >
               <svg className="w-6 h-6 flex-shrink-0" viewBox="0 0 24 24">

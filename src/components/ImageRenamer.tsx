@@ -2,7 +2,9 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import JSZip, { file } from 'jszip';
 import { Upload, Download, Clock, X, Image as ImageIcon, Calendar, Building2, Hash } from 'lucide-react';
+import { db } from '../utils/firebase'; // Adjust path as needed
 
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 interface FileWithPreview extends File {
   preview?: string;
   newName?: string;
@@ -27,7 +29,35 @@ const [selectedPreview, setSelectedPreview] = useState<string | null>(null);
     setNotification({ show: true, message, type });
     setTimeout(() => setNotification({ show: false, message: '', type: 'success' }), 4000);
   };
+function getDeviceId() {
+  let id = localStorage.getItem('deviceId');
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem('deviceId', id);
+  }
+  return id;
+}
 
+async function getLocationFromIP() {
+  try {
+    const response = await fetch("https://ipapi.co/json/");
+    return await response.json(); // contains city, country, etc.
+  } catch (e) {
+    return { error: "location_fetch_failed" };
+  }
+}
+
+async function trackDevice() {
+  const deviceId = getDeviceId();
+  const location = await getLocationFromIP();
+
+  const docRef = doc(db, "device_hits", deviceId);
+  await setDoc(docRef, {
+    lastSeen: serverTimestamp(),
+    location,
+    userAgent: navigator.userAgent,
+  }, { merge: true });
+}
 const onDrop = useCallback((acceptedFiles: File[]) => {
   if (acceptedFiles.length === 0) return;
 
@@ -93,6 +123,7 @@ const onDrop = useCallback((acceptedFiles: File[]) => {
   });
 
   useEffect(() => {
+    trackDevice()
     if (files.length > 0) {
       generateNewNames(files);
     }

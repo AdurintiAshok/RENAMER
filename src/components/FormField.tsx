@@ -13,7 +13,7 @@ const FormField = ({ label, children, error, icon }: FormFieldProps) => {
       <label className="block text-sm font-medium text-gray-700 flex items-center">
         {icon && <span className="mr-2">{icon}</span>}
         {label}
-      </label>
+      </label> 
       {children}
       {error && (
         <p className="text-sm text-red-500 flex items-center">
