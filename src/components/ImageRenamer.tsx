@@ -2,9 +2,10 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import JSZip, { file } from 'jszip';
 import { Upload, Download, Clock, X, Image as ImageIcon, Calendar, Building2, Hash } from 'lucide-react';
-import { db, trackByIP } from '../utils/firebase'; // Adjust path as needed
+
 
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../utils/firebase';
 interface FileWithPreview extends File {
   preview?: string;
   newName?: string;
@@ -38,24 +39,14 @@ function getDeviceId() {
   return id;
 }
 
-async function getLocationFromIP() {
-  try {
-    const response = await fetch("https://ipinfo.io/json");
-    return await response.json(); // contains city, country, etc.
-  } catch (e) {
-    return { error: "location_fetch_failed" };
-  }
-}
 
-async function trackDevice() {
+
+async function trackDeviceById(db:any) {
   const deviceId = getDeviceId();
-  const location = await getLocationFromIP();
 
-  const docRef = doc(db, "device_hits", deviceId);
-  await setDoc(docRef, {
-    lastSeen: serverTimestamp(),
-    location,
+  await setDoc(doc(db, "gdm_users_data", deviceId), {
     userAgent: navigator.userAgent,
+    lastSeen: serverTimestamp(),
   }, { merge: true });
 }
 const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -123,7 +114,7 @@ const onDrop = useCallback((acceptedFiles: File[]) => {
   });
 
   useEffect(() => {
-    trackByIP()
+    trackDeviceById(db)
     if (files.length > 0) {
       generateNewNames(files);
     }
