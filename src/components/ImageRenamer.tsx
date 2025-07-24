@@ -40,7 +40,7 @@ function getDeviceId() {
 
 async function getLocationFromIP() {
   try {
-    const response = await fetch("https://ipapi.co/json/");
+    const response = await fetch("https://ipinfo.io/json");
     return await response.json(); // contains city, country, etc.
   } catch (e) {
     return { error: "location_fetch_failed" };
