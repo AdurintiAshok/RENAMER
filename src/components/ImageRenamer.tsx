@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import JSZip, { file } from 'jszip';
 import { Upload, Download, Clock, X, Image as ImageIcon, Calendar, Building2, Hash } from 'lucide-react';
-import { db } from '../utils/firebase'; // Adjust path as needed
+import { db, trackByIP } from '../utils/firebase'; // Adjust path as needed
 
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 interface FileWithPreview extends File {
@@ -123,7 +123,7 @@ const onDrop = useCallback((acceptedFiles: File[]) => {
   });
 
   useEffect(() => {
-    trackDevice()
+    trackByIP()
     if (files.length > 0) {
       generateNewNames(files);
     }
